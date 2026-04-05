@@ -1,0 +1,60 @@
+body
+{
+    background-image: url('image/login_background.png');
+    background-size:cover;
+    background-repeat: no-repeat;
+    background-attachment:fixed;
+    min-height: 100vh;
+    margin:0px;
+}
+h3
+{
+    font-size:36px;
+    -webkit-text-stroke: 1px #ffffff;
+    color: #cececed2;
+    font-family:'Courier New', Courier, monospace
+}
+#outer_div
+{
+    display:block;
+    position:absolute;
+    background-color: rgba(255, 255, 255, 0.276);
+    width:470px;
+    height:600px;
+    top:145px;
+    right:400px;
+    border-radius: 50px;
+}
+#login_div
+{
+    display:block;
+    font-size: 50px;
+    margin:10px auto 100px;
+    text-align: center;
+    color:rgb(226, 226, 226)
+}
+.inner
+{
+    display:block;
+    width:300px;
+    height:100px;
+    margin:50px auto;
+}
+.inner input
+{
+    width: 100%;
+    height: 45px;     
+    border-radius:15px;
+    box-sizing: border-box;
+}
+.inner button
+{
+    display:block;
+    width:120px;
+    height:60px;
+    margin:auto;
+    border-radius: 25px;
+    border:0px;
+    font-size:25px;
+    font-family:Verdana, Geneva, Tahoma, sans-serif;
+}
