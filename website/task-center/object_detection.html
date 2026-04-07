@@ -1,170 +1,199 @@
 <!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-    <title>目标检测系统</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="这是一个关于无人机巡检系统的目标检测页面">
-    <link rel="stylesheet" href="odstyle.css">
-</head>
-<body>
-    <!-- 顶部标题栏 -->
-    <div id="title">
-        无人机拍摄目标检测系统
-        <button id="backBtn" onclick="history.back()">返回</button>
-    </div>
-
-    <!-- 中间上传区域 -->
-    <!-- 中间上传区域 -->
-<div class="upload-container">
-    <h2>上传检测图片</h2>
-    <!-- 1. 添加 id 方便 JS 获取 -->
-    <input type="file" id="fileInput" accept="image/*">
-    <button class="upload-btn" onclick="uploadAndDetect()">开始检测</button>
-    
-    <!-- 显示结果的区域 -->
-    <div id="resultArea" style="margin-top: 20px; color: #00ff00; font-size: 14px;"></div>
-</div>
-
-<script>
-    async function uploadAndDetect() {
-        const fileInput = document.getElementById('fileInput');
-        const resultArea = document.getElementById('resultArea');
-        
-        if (fileInput.files.length === 0) {
-            alert("请先选择文件！");
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
-
-        resultArea.innerText = "正在检测中...";
-
-        try {
-            // 2. 发送请求给 Python 后端
-            const response = await fetch('http://127.0.0.1:8000/api/upload', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            
-            if (data.result.status === 'success') {
-                // 3. 显示结果
-                resultArea.innerText = `检测到 ${data.result.objects.length} 个目标！`;
-                alert(`检测完成！发现：${data.result.objects.map(o => o.label).join(', ')}`);
-            } else {
-                resultArea.innerText = "检测失败";
-            }
-
-        } catch (error) {
-            console.error('Error:', error);
-            resultArea.innerText = "连接服务器失败";
-        }
-    }
-</script>
-
+    <title>图像检测 - 无人机智能巡检管控系统</title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        /* --- 顶部栏样式 (保持你之前的设置并优化) --- */
-        body {
-            margin: 0;
-            /* 关键：让 body 至少占满整个屏幕高度 */
-            min-height: 100vh; 
-            /* 关键：使用 Flex 布局让内容垂直排列并居中 */
+        .detect-grid {
+            display: grid;
+            grid-template-columns: minmax(300px, 380px) 1fr;
+            gap: 14px;
+        }
+
+        .upload-box {
             display: flex;
             flex-direction: column;
-            align-items: center; /* 水平居中 */
-            background-image: url('../login/image/login_background.png');
-            background-size:cover;
-            background-repeat: no-repeat;
-            background-attachment:fixed;
-            min-height: 100vh;
-            background-color: #f0f2f5; /* 给页面加个浅灰背景，突出半透明效果 */
+            gap: 12px;
         }
 
-        #title {
-            height: 64px;
-            width: 100%; /* 占满宽度 */
-            background-color: #22252b;
-            font-size: 30px;
-            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-            font-weight: 700;
-            color: white;
-            padding-left: 20px;
-            padding-right: 20px;
-            
-            /* Flex 布局：文字在左，按钮在右，垂直居中 */
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            
-            /* 关键：防止 flex 收缩，保持高度 */
-            flex-shrink: 0; 
-            box-sizing: border-box;
+        .hint {
+            color: var(--text-sub);
+            font-size: 13px;
         }
 
-        #backBtn {
-            background-color: #444;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        #backBtn:hover {
-            background-color: #555;
+        .img-stage {
+            min-height: 360px;
+            border: 1px dashed #c5ccd8;
+            border-radius: 8px;
+            background: #f8fafc;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
         }
 
-        /* --- 中间上传框样式 --- */
-        .upload-container {
-            /* 尺寸 */
-            width: 400px;       /* 宽度 */
-            height: 500px;      /* 高度：竖长方形 */
-            
-            /* 背景半透明：使用 rgba (红, 绿, 蓝, 透明度) */
-            /* 这里设置为深灰色背景，0.6 透明度 */
-            background-color: rgba(34, 37, 43, 0.142); 
-            
-            /* 或者如果你想要白色半透明磨砂玻璃效果，用这行： */
-            /* background-color: rgba(255, 255, 255, 0.25); */
-
-            /* 布局 */
-            margin-top: 50px;   /* 距离顶部一点距离 */
-            border-radius: 15px;/* 圆角 */
-            
-            /* 内容居中 */
-            display: flex;
-            flex-direction: column; /* 竖向排列子元素 */
-            justify-content: center; /* 垂直居中 */
-            align-items: center;     /* 水平居中 */
-            
-            /* 文字颜色 */
-            color: white;
-            
-            /* 边框阴影（可选，增加立体感） */
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            backdrop-filter: blur(5px); /* 毛玻璃模糊效果（可选） */
+        .img-stage img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
-        /* 输入框和按钮的美化 */
-        input[type="file"] {
-            margin: 20px 0;
-            font-size: 16px;
-            color: #ddd;
+        .img-empty {
+            color: #8a94a6;
+            font-size: 14px;
         }
 
-        .upload-btn {
-            padding: 10px 30px;
-            font-size: 18px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+        .result-list {
+            margin: 0;
+            padding-left: 18px;
+            color: #374151;
+            font-size: 14px;
         }
-        .upload-btn:hover {
-            background-color: #0056b3;
+
+        .status {
+            min-height: 22px;
+            color: #1d4ed8;
+            font-size: 14px;
+        }
+
+        @media (max-width: 1080px) {
+            .detect-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">无人机智能巡检管控系统</div>
+        <nav class="topnav">
+            <a href="#">管控中心</a>
+            <a class="active" href="index.html">作业中心</a>
+            <a href="#">飞控中心</a>
+            <a href="#">系统中心</a>
+        </nav>
+        <div class="user-panel">管理员：admin</div>
+    </header>
+
+    <main class="layout">
+        <aside class="sidebar">
+            <a class="menu-item" href="index.html">任务管理</a>
+            <a class="menu-item active" href="object_detection.html">图像检测</a>
+            <a class="menu-item" href="#">任务记录</a>
+            <a class="menu-item" href="../route-plan/index.html">航线规划</a>
+            <a class="menu-item" href="#">巡检对象管理</a>
+            <a class="menu-item" href="#">禁飞区管理</a>
+        </aside>
+
+        <section class="content">
+            <div class="crumb">作业中心 / 图像检测</div>
+
+            <section class="card detect-grid">
+                <div class="upload-box">
+                    <label>选择检测图片
+                        <input id="fileInput" type="file" accept="image/*">
+                    </label>
+                    <div class="hint">支持 JPG、PNG 等常见格式，点击按钮后将调用后端 YOLOv26 模型。</div>
+                    <button id="detectBtn" class="btn btn-primary">上传并检测</button>
+                    <div id="statusText" class="status"></div>
+                    <div>
+                        <strong>检测目标</strong>
+                        <ul id="resultList" class="result-list"></ul>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="hint">结果图（含检测框）</div>
+                    <div id="resultStage" class="img-stage">
+                        <span class="img-empty">检测完成后在此展示结果图</span>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        const API_BASE = "http://127.0.0.1:8000";
+        const refs = {
+            fileInput: document.getElementById("fileInput"),
+            detectBtn: document.getElementById("detectBtn"),
+            statusText: document.getElementById("statusText"),
+            resultList: document.getElementById("resultList"),
+            resultStage: document.getElementById("resultStage")
+        };
+
+        function setStatus(text, isError = false) {
+            refs.statusText.textContent = text;
+            refs.statusText.style.color = isError ? "#b91c1c" : "#1d4ed8";
+        }
+
+        function renderResultImage(url) {
+            if (!url) {
+                refs.resultStage.innerHTML = '<span class="img-empty">未生成结果图</span>';
+                return;
+            }
+
+            const img = document.createElement("img");
+            img.alt = "检测结果图";
+            img.src = `${API_BASE}${url}?t=${Date.now()}`;
+
+            refs.resultStage.innerHTML = "";
+            refs.resultStage.appendChild(img);
+        }
+
+        function renderObjects(objects) {
+            if (!Array.isArray(objects) || objects.length === 0) {
+                refs.resultList.innerHTML = "<li>未检测到目标</li>";
+                return;
+            }
+
+            refs.resultList.innerHTML = objects.map((item) => {
+                const conf = (Number(item.confidence) * 100).toFixed(2);
+                return `<li>${item.label}（置信度 ${conf}%）</li>`;
+            }).join("");
+        }
+
+        async function detectImage() {
+            const file = refs.fileInput.files[0];
+            if (!file) {
+                setStatus("请先选择图片文件", true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+            refs.detectBtn.disabled = true;
+            setStatus("正在上传并检测，请稍候...");
+            refs.resultList.innerHTML = "";
+
+            try {
+                const response = await fetch(`${API_BASE}/api/detect`, {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || "请求失败");
+                }
+
+                if (!data.result || data.result.status !== "success") {
+                    throw new Error((data.result && data.result.message) || "检测失败");
+                }
+
+                renderObjects(data.result.objects);
+                renderResultImage(data.result.result_image_url);
+                setStatus(`检测完成，共识别 ${data.result.objects.length} 个目标`);
+            } catch (error) {
+                setStatus(`检测失败：${error.message}`, true);
+                refs.resultList.innerHTML = "<li>请检查后端服务与模型配置</li>";
+            } finally {
+                refs.detectBtn.disabled = false;
+            }
+        }
+
+        refs.detectBtn.addEventListener("click", detectImage);
+    </script>
 </body>
+</html>

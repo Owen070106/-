@@ -1,10 +1,16 @@
 import os
 import shutil
+from uuid import uuid4
 from typing import Optional
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
+try:
+    from ultralytics import YOLO
+except Exception:
+    YOLO = None
 
 # 初始化 FastAPI 应用
 app = FastAPI(title="无人机目标检测系统")
@@ -21,42 +27,99 @@ app.add_middleware(
 
 # 创建上传文件夹（如果不存在）
 UPLOAD_DIR = "uploads"
+RESULT_DIR = "results"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(RESULT_DIR, exist_ok=True)
+
+# 挂载静态目录，便于前端直接访问上传图和结果图
+app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/static/results", StaticFiles(directory=RESULT_DIR), name="results")
+
+MODEL_PATH = os.getenv("YOLOV26_MODEL", "./yolov10n.pt")
+MODEL_PATH = os.path.abspath(os.path.expanduser(MODEL_PATH))
+model_load_error: Optional[str] = None
+yolo_model = None
+
+if YOLO is None:
+    model_load_error = "未安装 ultralytics，请先安装：pip install ultralytics"
+elif not os.path.isfile(MODEL_PATH):
+    model_load_error = (
+        f"未找到本地模型权重: {MODEL_PATH}。"
+        "请把权重放到该路径，或设置环境变量 YOLOV26_MODEL 指向 .pt 文件。"
+    )
+else:
+    try:
+        yolo_model = YOLO(MODEL_PATH)
+    except Exception as e:
+        model_load_error = f"模型加载失败: {str(e)}"
 
 # ==========================================
 # 核心逻辑：模拟 AI 检测接口
 # ==========================================
 def run_ai_detection(image_path: str) -> dict:
-    """
-    这里预留了 AI 模型接入的位置。
-    目前返回的是模拟数据，后期请替换为你的 PyTorch/TensorFlow/YOLO 代码。
-    """
-    print(f"正在处理图片: {image_path}")
-    
-    # --- 在这里接入你的 AI 模型 ---
-    # 示例伪代码:
-    # results = model(image_path)
-    # detected_objects = parse_results(results)
-    
-    # 模拟耗时操作 (假设模型跑了 2 秒)
-    import time
-    time.sleep(2) 
+    """调用 YOLOv26 推理并返回标注结果图与检测框信息。"""
+    if yolo_model is None:
+        return {
+            "status": "failed",
+            "message": model_load_error or "YOLO 模型未初始化",
+            "objects": [],
+            "result_image_url": None
+        }
 
-    # 模拟返回的检测结果
-    return {
-        "status": "success",
-        "message": "检测完成",
-        "objects": [
-            {"label": "无人机", "confidence": 0.98, "bbox": [100, 100, 200, 200]},
-            {"label": "车辆", "confidence": 0.85, "bbox": [300, 300, 400, 400]}
-        ]
-    }
+    try:
+        results = yolo_model.predict(source=image_path, save=False, verbose=False)
+        if not results:
+            return {
+                "status": "failed",
+                "message": "模型未返回有效结果",
+                "objects": [],
+                "result_image_url": None
+            }
+
+        result = results[0]
+        result_filename = f"result_{uuid4().hex}.jpg"
+        result_path = os.path.join(RESULT_DIR, result_filename)
+        result.save(filename=result_path)
+
+        objects = []
+        boxes = result.boxes
+        if boxes is not None:
+            for box in boxes:
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                x1, y1, x2, y2 = [round(v, 2) for v in box.xyxy[0].tolist()]
+
+                names = yolo_model.names
+                if isinstance(names, dict):
+                    label = str(names.get(cls_id, cls_id))
+                else:
+                    label = str(names[cls_id]) if cls_id < len(names) else str(cls_id)
+
+                objects.append({
+                    "label": label,
+                    "confidence": round(conf, 4),
+                    "bbox": [x1, y1, x2, y2]
+                })
+
+        return {
+            "status": "success",
+            "message": "检测完成",
+            "objects": objects,
+            "result_image_url": f"/static/results/{result_filename}"
+        }
+    except Exception as e:
+        return {
+            "status": "failed",
+            "message": f"检测失败: {str(e)}",
+            "objects": [],
+            "result_image_url": None
+        }
 
 # ==========================================
 # 接口：接收文件并返回结果
 # ==========================================
-@app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
+@app.post("/api/detect")
+async def detect(file: UploadFile = File(...)):
     """
     接收前端上传的文件，保存后送入 AI 模型，最后返回 JSON 结果
     """
@@ -65,7 +128,9 @@ async def upload_file(file: UploadFile = File(...)):
         return JSONResponse(status_code=400, content={"message": "请上传图片文件"})
 
     # 2. 保存文件到本地
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    ext = os.path.splitext(file.filename or "")[1] or ".jpg"
+    saved_filename = f"upload_{uuid4().hex}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, saved_filename)
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -79,9 +144,15 @@ async def upload_file(file: UploadFile = File(...)):
     # 4. 返回结果给前端
     return {
         "filename": file.filename,
-        "filepath": file_path, # 返回文件路径，方便前端显示图片
+        "upload_image_url": f"/static/uploads/{saved_filename}",
         "result": detection_result
     }
+
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    # 兼容旧接口，转发到新检测接口
+    return await detect(file)
 
 # ==========================================
 # 启动服务器
