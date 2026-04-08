@@ -35,7 +35,7 @@ os.makedirs(RESULT_DIR, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static/results", StaticFiles(directory=RESULT_DIR), name="results")
 
-MODEL_PATH = os.getenv("YOLOV26_MODEL", "./yolov10n.pt")
+MODEL_PATH = os.getenv("YOLOV26_MODEL", "./best.pt")
 MODEL_PATH = os.path.abspath(os.path.expanduser(MODEL_PATH))
 model_load_error: Optional[str] = None
 yolo_model = None
@@ -82,14 +82,19 @@ def run_ai_detection(image_path: str) -> dict:
         result.save(filename=result_path)
 
         objects = []
-        boxes = result.boxes
-        if boxes is not None:
-            for box in boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = [round(v, 2) for v in box.xyxy[0].tolist()]
+        names = getattr(result, "names", None) or getattr(yolo_model, "names", {})
 
-                names = yolo_model.names
+        boxes = getattr(result, "boxes", None)
+        if boxes is not None and len(boxes) > 0:
+            xyxy_list = boxes.xyxy.cpu().tolist()
+            conf_list = boxes.conf.cpu().tolist()
+            cls_list = boxes.cls.cpu().tolist()
+
+            for i in range(len(xyxy_list)):
+                cls_id = int(cls_list[i])
+                conf = float(conf_list[i])
+                x1, y1, x2, y2 = [round(v, 2) for v in xyxy_list[i]]
+
                 if isinstance(names, dict):
                     label = str(names.get(cls_id, cls_id))
                 else:
@@ -100,6 +105,34 @@ def run_ai_detection(image_path: str) -> dict:
                     "confidence": round(conf, 4),
                     "bbox": [x1, y1, x2, y2]
                 })
+
+        # 兼容 OBB 模型结果：有些模型结果在 result.obb 中
+        if not objects:
+            obb = getattr(result, "obb", None)
+            if obb is not None and len(obb) > 0:
+                xywhr_list = obb.xywhr.cpu().tolist()
+                conf_list = obb.conf.cpu().tolist()
+                cls_list = obb.cls.cpu().tolist()
+
+                for i in range(len(xywhr_list)):
+                    cls_id = int(cls_list[i])
+                    conf = float(conf_list[i])
+                    cx, cy, w, h, _ = xywhr_list[i]
+                    x1 = round(cx - w / 2, 2)
+                    y1 = round(cy - h / 2, 2)
+                    x2 = round(cx + w / 2, 2)
+                    y2 = round(cy + h / 2, 2)
+
+                    if isinstance(names, dict):
+                        label = str(names.get(cls_id, cls_id))
+                    else:
+                        label = str(names[cls_id]) if cls_id < len(names) else str(cls_id)
+
+                    objects.append({
+                        "label": label,
+                        "confidence": round(conf, 4),
+                        "bbox": [x1, y1, x2, y2]
+                    })
 
         return {
             "status": "success",
