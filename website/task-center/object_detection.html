@@ -68,6 +68,35 @@
             margin: 8px 0;
         }
 
+        .realtime-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        .realtime-controls input {
+            width: 110px;
+            padding: 6px 8px;
+            border: 1px solid #c5ccd8;
+            border-radius: 6px;
+        }
+
+        .model-picker {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .model-picker select {
+            max-width: 260px;
+            padding: 6px 8px;
+            border: 1px solid #c5ccd8;
+            border-radius: 6px;
+            background: #fff;
+        }
+
         @media (max-width: 1080px) {
             .detect-grid {
                 grid-template-columns: 1fr;
@@ -105,8 +134,19 @@
                     <label>选择检测图片
                         <input id="fileInput" type="file" accept="image/*">
                     </label>
+                    <div class="model-picker">
+                        <label for="modelSelect">选择检测模型</label>
+                        <select id="modelSelect"></select>
+                    </div>
                     <div class="hint">支持 JPG、PNG 等常见格式，点击按钮后将调用后端 YOLOv26 模型。</div>
                     <button id="detectBtn" class="btn btn-primary">上传并检测</button>
+                    <div class="realtime-controls">
+                        <button id="startRealtimeBtn" class="btn">开启实时查看</button>
+                        <button id="stopRealtimeBtn" class="btn">停止实时查看</button>
+                        <label>刷新(ms)
+                            <input id="realtimeInterval" type="number" min="200" step="100" value="1000">
+                        </label>
+                    </div>
                     <div id="statusText" class="status"></div>
                     <div>
                         <strong>检测目标</strong>
@@ -134,11 +174,25 @@
         const refs = {
             userPanel: document.getElementById("userPanel"),
             fileInput: document.getElementById("fileInput"),
+            modelSelect: document.getElementById("modelSelect"),
             detectBtn: document.getElementById("detectBtn"),
+            startRealtimeBtn: document.getElementById("startRealtimeBtn"),
+            stopRealtimeBtn: document.getElementById("stopRealtimeBtn"),
+            realtimeInterval: document.getElementById("realtimeInterval"),
             statusText: document.getElementById("statusText"),
             resultList: document.getElementById("resultList"),
             resultStage: document.getElementById("resultStage"),
             historyList: document.getElementById("historyList")
+        };
+
+        const rtState = {
+            timer: null,
+            lastId: 0
+        };
+
+        const modelState = {
+            loaded: false,
+            selected: ""
         };
 
         function initUserPanel() {
@@ -210,6 +264,76 @@
             renderHistory(data.items);
         }
 
+        async function loadModels() {
+            const response = await fetch(`${API_BASE}/api/models`);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || "模型列表加载失败");
+            }
+
+            const items = Array.isArray(data.items) ? data.items : [];
+            if (items.length === 0) {
+                refs.modelSelect.innerHTML = '<option value="">默认模型</option>';
+                modelState.loaded = true;
+                return;
+            }
+
+            refs.modelSelect.innerHTML = items.map((item) => {
+                const selected = item.isDefault ? "selected" : "";
+                return `<option value="${item.name}" ${selected}>${item.name}${item.isDefault ? " (默认)" : ""}</option>`;
+            }).join("");
+
+            modelState.selected = refs.modelSelect.value || data.default || "";
+            modelState.loaded = true;
+        }
+
+        async function loadLatestDetection() {
+            const response = await fetch(`${API_BASE}/api/detections/latest`);
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.detail || "最新记录加载失败");
+            }
+
+            const item = data.item;
+            if (!item || item.id === rtState.lastId) {
+                return;
+            }
+
+            rtState.lastId = item.id;
+            if (item.resultImageUrl) {
+                renderResultImage(item.resultImageUrl);
+            }
+
+            refs.resultList.innerHTML = `<li>最近一次检测目标数：${item.objectCount}</li>`;
+            setStatus(`实时更新：${item.createdAt} | ${item.status} | 目标数 ${item.objectCount}`, item.status !== "success");
+            await loadHistory();
+        }
+
+        function stopRealtimeMode() {
+            if (rtState.timer) {
+                clearInterval(rtState.timer);
+                rtState.timer = null;
+            }
+            setStatus("已停止实时查看");
+        }
+
+        function startRealtimeMode() {
+            stopRealtimeMode();
+            const interval = Math.max(200, Number(refs.realtimeInterval.value) || 1000);
+            refs.realtimeInterval.value = String(interval);
+            setStatus("实时查看已开启，等待新检测帧...");
+
+            loadLatestDetection().catch((error) => {
+                setStatus(`实时更新失败：${error.message}`, true);
+            });
+
+            rtState.timer = setInterval(() => {
+                loadLatestDetection().catch((error) => {
+                    setStatus(`实时更新失败：${error.message}`, true);
+                });
+            }, interval);
+        }
+
         async function detectImage() {
             const file = refs.fileInput.files[0];
             if (!file) {
@@ -219,6 +343,7 @@
 
             const formData = new FormData();
             formData.append("file", file);
+            formData.append("model_name", refs.modelSelect.value || "");
             refs.detectBtn.disabled = true;
             setStatus("正在上传并检测，请稍候...");
             refs.resultList.innerHTML = "";
@@ -240,7 +365,8 @@
 
                 renderObjects(data.result.objects);
                 renderResultImage(data.result.result_image_url);
-                setStatus(`检测完成，共识别 ${data.result.objects.length} 个目标`);
+                const usingModel = data.result.model || refs.modelSelect.value || "默认模型";
+                setStatus(`检测完成，共识别 ${data.result.objects.length} 个目标，模型：${usingModel}`);
                 await loadHistory();
             } catch (error) {
                 setStatus(`检测失败：${error.message}`, true);
@@ -251,6 +377,16 @@
         }
 
         refs.detectBtn.addEventListener("click", detectImage);
+        refs.startRealtimeBtn.addEventListener("click", startRealtimeMode);
+        refs.stopRealtimeBtn.addEventListener("click", stopRealtimeMode);
+        refs.modelSelect.addEventListener("change", () => {
+            modelState.selected = refs.modelSelect.value || "";
+        });
+
+        loadModels().catch((error) => {
+            refs.modelSelect.innerHTML = '<option value="">默认模型</option>';
+            setStatus(`模型列表加载失败：${error.message}`, true);
+        });
 
         loadHistory().catch((error) => {
             refs.historyList.innerHTML = `<li>${error.message}</li>`;

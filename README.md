@@ -53,3 +53,63 @@ uvicorn website.backend.text:app --host 127.0.0.1 --port 8000 --reload
 
 - 启动时会自动建表：users、tasks、route_drafts、detection_records。
 - 图像检测依赖本地模型权重，默认路径是项目根目录的 best.pt。
+
+## 5. 对接 UE4.27 + AirSim 做实时俯视检测
+
+### 5.1 你没有无人机控制代码时的最小方案
+
+项目已提供桥接脚本：
+
+- website/backend/airsim_realtime_bridge.py
+
+该脚本包含最小控制能力：
+
+- 连接 AirSim
+- 可选自动解锁 + 起飞 + 定高悬停
+- 将相机姿态设置为正下方俯视（Pitch=-90）
+- 按指定帧率抓图并调用后端实时检测接口
+
+### 5.2 AirSim 配置（俯视相机）
+
+可参考项目根目录示例文件：
+
+- airsim_settings.json.example
+
+将其内容复制到你的 AirSim settings.json（通常在 文档/AirSim/settings.json），并确保 UE 场景中车辆名与相机名一致。
+
+### 5.3 安装新增依赖
+
+pip install -r requirements.txt
+
+### 5.4 启动后端
+
+uvicorn website.backend.text:app --host 127.0.0.1 --port 8000 --reload
+
+### 5.5 启动桥接脚本
+
+无控制代码推荐先用自动起飞模式：
+
+python website/backend/airsim_realtime_bridge.py --vehicle Drone1 --camera down_cam --backend http://127.0.0.1:8000 --fps 6 --takeoff --flight-height 25
+
+如果你已经在 UE/AirSim 中手动控制飞行，可去掉 --takeoff，仅采图推理：
+
+python website/backend/airsim_realtime_bridge.py --vehicle Drone1 --camera down_cam --backend http://127.0.0.1:8000 --fps 6
+
+### 5.6 页面查看实时结果
+
+打开图像检测页：
+
+- website/task-center/object_detection.html
+
+点击“开启实时查看”，页面会轮询最新检测记录并更新结果图。
+
+## 6. 新增实时接口说明
+
+- POST /api/detect/frame
+	- 表单字段：
+		- file: 图片帧（image/*）
+		- source: 来源标签（默认 airsim）
+		- camera: 相机名（默认 down_cam）
+		- persist_upload: 是否保存原始帧（默认 false）
+- GET /api/detections/latest
+	- 获取最新一条检测记录，供前端实时刷新。

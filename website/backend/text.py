@@ -1,16 +1,24 @@
 import os
 import shutil
+import threading
 from datetime import datetime
 from uuid import uuid4
 from typing import Generator, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import Session, declarative_base, mapped_column, sessionmaker
+
+try:
+    import cv2
+    import numpy as np
+except Exception:
+    cv2 = None
+    np = None
 
 try:
     from ultralytics import YOLO
@@ -44,6 +52,8 @@ MODEL_PATH = os.getenv("YOLOV26_MODEL", "./best.pt")
 MODEL_PATH = os.path.abspath(os.path.expanduser(MODEL_PATH))
 model_load_error: Optional[str] = None
 yolo_model = None
+MODEL_CACHE = {}
+MODEL_CACHE_LOCK = threading.Lock()
 
 # ==========================================
 # MySQL 配置与数据库模型
@@ -241,40 +251,111 @@ def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     init_seed_data()
 
+def discover_model_paths() -> list[str]:
+    candidates = []
+    seen = set()
+    search_dirs = [os.getcwd(), os.path.dirname(MODEL_PATH)]
+
+    for base_dir in search_dirs:
+        base_dir = os.path.abspath(base_dir)
+        if not os.path.isdir(base_dir):
+            continue
+
+        try:
+            for name in os.listdir(base_dir):
+                if not name.lower().endswith(".pt"):
+                    continue
+                full_path = os.path.abspath(os.path.join(base_dir, name))
+                if full_path in seen:
+                    continue
+                seen.add(full_path)
+                candidates.append(full_path)
+        except Exception:
+            continue
+
+    return sorted(candidates)
+
+
+def resolve_model_path(model_name: str = "") -> str:
+    if not model_name:
+        return MODEL_PATH
+
+    model_name = model_name.strip()
+    if os.path.isabs(model_name):
+        return os.path.abspath(model_name)
+
+    path_1 = os.path.abspath(os.path.join(os.getcwd(), model_name))
+    if os.path.isfile(path_1):
+        return path_1
+
+    path_2 = os.path.abspath(os.path.join(os.path.dirname(MODEL_PATH), model_name))
+    return path_2
+
+
+def get_yolo_model(model_name: str = ""):
+    global yolo_model, model_load_error
+
+    if YOLO is None:
+        return None, "未安装 ultralytics，请先安装：pip install ultralytics", ""
+
+    model_path = resolve_model_path(model_name)
+    if not os.path.isfile(model_path):
+        return (
+            None,
+            f"未找到模型权重: {model_path}。请检查模型文件名或路径。",
+            model_path,
+        )
+
+    with MODEL_CACHE_LOCK:
+        cached = MODEL_CACHE.get(model_path)
+        if cached is not None:
+            return cached, None, model_path
+
+        try:
+            loaded = YOLO(model_path)
+            MODEL_CACHE[model_path] = loaded
+            if model_path == MODEL_PATH:
+                yolo_model = loaded
+                model_load_error = None
+            return loaded, None, model_path
+        except Exception as e:
+            return None, f"模型加载失败: {str(e)}", model_path
+
+
 if YOLO is None:
     model_load_error = "未安装 ultralytics，请先安装：pip install ultralytics"
-elif not os.path.isfile(MODEL_PATH):
-    model_load_error = (
-        f"未找到本地模型权重: {MODEL_PATH}。"
-        "请把权重放到该路径，或设置环境变量 YOLOV26_MODEL 指向 .pt 文件。"
-    )
 else:
-    try:
-        yolo_model = YOLO(MODEL_PATH)
-    except Exception as e:
-        model_load_error = f"模型加载失败: {str(e)}"
+    _model, _err, _path = get_yolo_model("")
+    if _model is None:
+        model_load_error = _err
+    else:
+        yolo_model = _model
+        model_load_error = None
 
 # ==========================================
 # 核心逻辑：模拟 AI 检测接口
 # ==========================================
-def run_ai_detection(image_path: str) -> dict:
+def run_ai_detection(image_path: str, model_name: str = "") -> dict:
     """调用 YOLOv26 推理并返回标注结果图与检测框信息。"""
-    if yolo_model is None:
+    model, err, selected_model_path = get_yolo_model(model_name)
+    if model is None:
         return {
             "status": "failed",
-            "message": model_load_error or "YOLO 模型未初始化",
+            "message": err or model_load_error or "YOLO 模型未初始化",
             "objects": [],
-            "result_image_url": None
+            "result_image_url": None,
+            "model": os.path.basename(selected_model_path) if selected_model_path else "",
         }
 
     try:
-        results = yolo_model.predict(source=image_path, save=False, verbose=False)
+        results = model.predict(source=image_path, save=False, verbose=False)
         if not results:
             return {
                 "status": "failed",
                 "message": "模型未返回有效结果",
                 "objects": [],
-                "result_image_url": None
+                "result_image_url": None,
+                "model": os.path.basename(selected_model_path),
             }
 
         result = results[0]
@@ -283,7 +364,7 @@ def run_ai_detection(image_path: str) -> dict:
         result.save(filename=result_path)
 
         objects = []
-        names = getattr(result, "names", None) or getattr(yolo_model, "names", {})
+        names = getattr(result, "names", None) or getattr(model, "names", {})
 
         boxes = getattr(result, "boxes", None)
         if boxes is not None and len(boxes) > 0:
@@ -339,15 +420,157 @@ def run_ai_detection(image_path: str) -> dict:
             "status": "success",
             "message": "检测完成",
             "objects": objects,
-            "result_image_url": f"/static/results/{result_filename}"
+            "result_image_url": f"/static/results/{result_filename}",
+            "model": os.path.basename(selected_model_path),
         }
     except Exception as e:
         return {
             "status": "failed",
             "message": f"检测失败: {str(e)}",
             "objects": [],
-            "result_image_url": None
+            "result_image_url": None,
+            "model": os.path.basename(selected_model_path),
         }
+
+
+def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
+    """对内存中的 BGR 图像帧进行检测并返回结果。"""
+    model, err, selected_model_path = get_yolo_model(model_name)
+    if model is None:
+        return {
+            "status": "failed",
+            "message": err or model_load_error or "YOLO 模型未初始化",
+            "objects": [],
+            "result_image_url": None,
+            "model": os.path.basename(selected_model_path) if selected_model_path else "",
+        }
+
+    if cv2 is None or np is None:
+        return {
+            "status": "failed",
+            "message": "未安装 opencv-python 或 numpy，无法处理实时帧",
+            "objects": [],
+            "result_image_url": None,
+        }
+
+    try:
+        results = model.predict(source=frame_bgr, save=False, verbose=False)
+        if not results:
+            return {
+                "status": "failed",
+                "message": "模型未返回有效结果",
+                "objects": [],
+                "result_image_url": None,
+                "model": os.path.basename(selected_model_path),
+            }
+
+        result = results[0]
+        result_filename = f"result_{uuid4().hex}.jpg"
+        result_path = os.path.join(RESULT_DIR, result_filename)
+
+        plotted = result.plot()
+        cv2.imwrite(result_path, plotted)
+
+        objects = []
+        names = getattr(result, "names", None) or getattr(model, "names", {})
+        boxes = getattr(result, "boxes", None)
+
+        if boxes is not None and len(boxes) > 0:
+            xyxy_list = boxes.xyxy.cpu().tolist()
+            conf_list = boxes.conf.cpu().tolist()
+            cls_list = boxes.cls.cpu().tolist()
+
+            for i in range(len(xyxy_list)):
+                cls_id = int(cls_list[i])
+                conf = float(conf_list[i])
+                x1, y1, x2, y2 = [round(v, 2) for v in xyxy_list[i]]
+
+                if isinstance(names, dict):
+                    label = str(names.get(cls_id, cls_id))
+                else:
+                    label = str(names[cls_id]) if cls_id < len(names) else str(cls_id)
+
+                objects.append(
+                    {
+                        "label": label,
+                        "confidence": round(conf, 4),
+                        "bbox": [x1, y1, x2, y2],
+                    }
+                )
+
+        if not objects:
+            obb = getattr(result, "obb", None)
+            if obb is not None and len(obb) > 0:
+                xywhr_list = obb.xywhr.cpu().tolist()
+                conf_list = obb.conf.cpu().tolist()
+                cls_list = obb.cls.cpu().tolist()
+
+                for i in range(len(xywhr_list)):
+                    cls_id = int(cls_list[i])
+                    conf = float(conf_list[i])
+                    cx, cy, w, h, _ = xywhr_list[i]
+                    x1 = round(cx - w / 2, 2)
+                    y1 = round(cy - h / 2, 2)
+                    x2 = round(cx + w / 2, 2)
+                    y2 = round(cy + h / 2, 2)
+
+                    if isinstance(names, dict):
+                        label = str(names.get(cls_id, cls_id))
+                    else:
+                        label = str(names[cls_id]) if cls_id < len(names) else str(cls_id)
+
+                    objects.append(
+                        {
+                            "label": label,
+                            "confidence": round(conf, 4),
+                            "bbox": [x1, y1, x2, y2],
+                        }
+                    )
+
+        return {
+            "status": "success",
+            "message": "检测完成",
+            "objects": objects,
+            "result_image_url": f"/static/results/{result_filename}",
+            "model": os.path.basename(selected_model_path),
+        }
+    except Exception as e:
+        return {
+            "status": "failed",
+            "message": f"检测失败: {str(e)}",
+            "objects": [],
+            "result_image_url": None,
+            "model": os.path.basename(selected_model_path),
+        }
+
+
+@app.get("/api/models")
+def get_models():
+    items = []
+    default_abs = os.path.abspath(MODEL_PATH)
+
+    for path in discover_model_paths():
+        items.append(
+            {
+                "name": os.path.basename(path),
+                "path": path,
+                "isDefault": os.path.abspath(path) == default_abs,
+            }
+        )
+
+    if not items and os.path.isfile(default_abs):
+        items.append(
+            {
+                "name": os.path.basename(default_abs),
+                "path": default_abs,
+                "isDefault": True,
+            }
+        )
+
+    return {
+        "default": os.path.basename(default_abs),
+        "items": items,
+    }
 
 # ==========================================
 # 接口：登录
@@ -555,7 +778,11 @@ def create_route(payload: RoutePayload, db: Session = Depends(get_db)):
 # 接口：接收文件并返回结果
 # ==========================================
 @app.post("/api/detect")
-async def detect(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def detect(
+    file: UploadFile = File(...),
+    model_name: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
     """
     接收前端上传的文件，保存后送入 AI 模型，最后返回 JSON 结果
     """
@@ -575,7 +802,7 @@ async def detect(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     # 3. 调用 AI 检测逻辑
     # 这里调用上面定义的 run_ai_detection 函数
-    detection_result = run_ai_detection(file_path)
+    detection_result = run_ai_detection(file_path, model_name=model_name)
 
     record = DetectionRecord(
         original_filename=file.filename or "unknown",
@@ -596,10 +823,73 @@ async def detect(file: UploadFile = File(...), db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/detect/frame")
+async def detect_frame(
+    file: UploadFile = File(...),
+    source: str = Form(default="airsim"),
+    camera: str = Form(default="down_cam"),
+    model_name: str = Form(default=""),
+    persist_upload: bool = Form(default=False),
+    db: Session = Depends(get_db),
+):
+    """接收实时图像帧（内存处理），用于 AirSim/UE 实时检测。"""
+    if cv2 is None or np is None:
+        return JSONResponse(
+            status_code=500,
+            content={"message": "缺少 opencv-python 或 numpy 依赖"},
+        )
+
+    if not file.content_type.startswith("image/"):
+        return JSONResponse(status_code=400, content={"message": "请上传图片帧"})
+
+    try:
+        raw = await file.read()
+        np_arr = np.frombuffer(raw, dtype=np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError("图像解码失败")
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"message": f"帧解析失败: {str(e)}"})
+
+    detection_result = run_ai_detection_frame(frame, model_name=model_name)
+
+    upload_image_url = None
+    original_name = file.filename or "frame.jpg"
+
+    if persist_upload:
+        ext = os.path.splitext(original_name)[1] or ".jpg"
+        saved_filename = f"upload_{uuid4().hex}{ext}"
+        save_path = os.path.join(UPLOAD_DIR, saved_filename)
+        try:
+            with open(save_path, "wb") as fw:
+                fw.write(raw)
+            upload_image_url = f"/static/uploads/{saved_filename}"
+        except Exception:
+            upload_image_url = None
+
+    record = DetectionRecord(
+        original_filename=f"{source}:{camera}:{original_name}",
+        upload_image_url=upload_image_url or "",
+        result_image_url=detection_result.get("result_image_url"),
+        status=detection_result.get("status", "failed"),
+        message=detection_result.get("message", ""),
+        object_count=len(detection_result.get("objects", [])),
+    )
+    db.add(record)
+    db.commit()
+
+    return {
+        "filename": original_name,
+        "source": source,
+        "camera": camera,
+        "result": detection_result,
+    }
+
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # 兼容旧接口，转发到新检测接口
-    return await detect(file, db)
+    return await detect(file, "", db)
 
 
 @app.get("/api/detections")
@@ -619,6 +909,26 @@ def get_detections(limit: int = Query(default=20, ge=1, le=200), db: Session = D
             }
             for item in rows
         ]
+    }
+
+
+@app.get("/api/detections/latest")
+def get_latest_detection(db: Session = Depends(get_db)):
+    item = db.query(DetectionRecord).order_by(DetectionRecord.id.desc()).first()
+    if not item:
+        return {"item": None}
+
+    return {
+        "item": {
+            "id": item.id,
+            "filename": item.original_filename,
+            "status": item.status,
+            "message": item.message,
+            "objectCount": item.object_count,
+            "uploadImageUrl": item.upload_image_url,
+            "resultImageUrl": item.result_image_url,
+            "createdAt": item.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }
     }
 
 # ==========================================
