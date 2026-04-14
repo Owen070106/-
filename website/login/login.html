@@ -6,30 +6,47 @@
     <title>登录 - 无人机后台管理系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <h3><strong>无人机后台管理系统</strong></h3>
-    <div id="outer_div">
-        <div id="login_div">Login</div>
-        <div class="inner"><input id="username" type="text" name="name" placeholder="请输入姓名"></div>
-        <div class="inner"><input id="password" type="password" name="password" placeholder="请输入密码"></div>
-        <div class="inner button-row">
-            <button id="login_btn">登录</button>
-            <button id="open_register_btn" class="secondary-btn" type="button">注册账号</button>
-        </div>
-        <p id="login_tip"></p>
-    </div>
+
+<body style="background: url('../login/image/drone-bg.png') center center / cover no-repeat; min-height: 100vh;">
+    <main class="login-page" style="display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+        <section class="login-card-wrap" style="width: 100%; max-width: 400px;">
+            <div class="card login-card">
+                <div class="card-body">
+                    <div class="login-card-head">
+                        <p class="login-kicker">Login</p>
+                        <h2>账号登录</h2>
+                    </div>
+
+                    <div class="form-group login-form-group">
+                        <input id="username" class="form-control login-input" type="text" name="name" placeholder="请输入姓名">
+                    </div>
+                    <div class="form-group login-form-group">
+                        <input id="password" class="form-control login-input" type="password" name="password" placeholder="请输入密码">
+                    </div>
+
+                    <div class="login-actions">
+                        <button id="login_btn" class="btn btn-success" type="button">登录</button>
+                        <button id="open_register_btn" class="btn btn-outline-secondary" type="button">注册账号</button>
+                    </div>
+                    <p id="login_tip"></p>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <div id="register_modal" class="modal hidden">
         <div class="modal-card">
-            <h4>注册账号</h4>
-            <div class="modal-field"><input id="register_display_name" type="text" placeholder="显示名称"></div>
-            <div class="modal-field"><input id="register_username" type="text" placeholder="用户名（至少3位）"></div>
-            <div class="modal-field"><input id="register_password" type="password" placeholder="密码（至少6位）"></div>
-            <div class="modal-field"><input id="register_confirm_password" type="password" placeholder="确认密码"></div>
-            <p id="register_tip"></p>
-            <div class="modal-actions">
-                <button id="register_btn" type="button">提交注册</button>
-                <button id="close_register_btn" class="secondary-btn" type="button">取消</button>
+            <div class="card-body">
+                <h4>注册账号</h4>
+                <div class="modal-field"><input id="register_display_name" class="form-control" type="text" placeholder="显示名称"></div>
+                <div class="modal-field"><input id="register_username" class="form-control" type="text" placeholder="用户名（至少3位）"></div>
+                <div class="modal-field"><input id="register_password" class="form-control" type="password" placeholder="密码（至少6位）"></div>
+                <div class="modal-field"><input id="register_confirm_password" class="form-control" type="password" placeholder="确认密码"></div>
+                <p id="register_tip"></p>
+                <div class="modal-actions">
+                    <button id="register_btn" class="btn btn-success" type="button">提交注册</button>
+                    <button id="close_register_btn" class="btn btn-outline-secondary" type="button">取消</button>
+                </div>
             </div>
         </div>
     </div>

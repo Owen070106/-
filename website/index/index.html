@@ -3,60 +3,127 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>首页 - 无人机系统</title>
-	<style>
-		body {
-			margin: 0;
-			min-height: 100vh;
-			display: grid;
-			place-items: center;
-			font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-			background: linear-gradient(140deg, #17212f, #184d5b 45%, #1f6f66);
-			color: #fff;
-		}
-
-		.panel {
-			width: min(90vw, 700px);
-			border-radius: 14px;
-			padding: 30px;
-			background: rgba(255, 255, 255, 0.1);
-			border: 1px solid rgba(255, 255, 255, 0.25);
-			backdrop-filter: blur(8px);
-		}
-
-		h1 {
-			margin-top: 0;
-			margin-bottom: 20px;
-		}
-
-		.links {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 12px;
-		}
-
-		a {
-			color: #fff;
-			text-decoration: none;
-			padding: 10px 14px;
-			border-radius: 8px;
-			border: 1px solid rgba(255, 255, 255, 0.5);
-			background: rgba(255, 255, 255, 0.1);
-		}
-
-		a:hover {
-			background: rgba(255, 255, 255, 0.2);
-		}
-	</style>
+	<title>首页 - 无人机智能巡检管控系统</title>
+	<link rel="stylesheet" href="style.css">
 </head>
-<body>
-	<section class="panel">
-		<h1>无人机后台管理系统</h1>
-		<div class="links">
-			<a href="../login/login.html">登录页</a>
-			<a href="../task-center/index.html">任务管理页</a>
-			<a href="../route-plan/index.html">航线规划页</a>
+<body class="skin-default-dark fixed-layout">
+	<div id="main-wrapper">
+		<header class="topbar">
+			<nav class="navbar top-navbar navbar-expand-md navbar-dark">
+				<div class="navbar-header">
+					<a class="navbar-brand" href="index.html">
+						<span class="brand-mark">UAV</span>
+						<span class="brand-copy">无人机智能巡检管控系统</span>
+					</a>
+				</div>
+				<div class="navbar-collapse d-flex justify-content-between align-items-center">
+					<ul class="navbar-nav mr-auto top-links">
+						<li class="nav-item"><a class="nav-link active" href="index.html">首页</a></li>
+						<li class="nav-item"><a class="nav-link" href="../task-center/index.html">作业中心</a></li>
+						<li class="nav-item"><a class="nav-link" href="../route-plan/index.html">航线规划</a></li>
+						<li class="nav-item"><a class="nav-link" href="../task-center/object_detection.html">图像检测</a></li>
+					</ul>
+					<ul class="navbar-nav my-lg-0">
+						<li class="nav-item dropdown">
+							<span id="userPanel" class="nav-link user-chip">欢迎访问</span>
+						</li>
+					</ul>
+				</div>
+			</nav>
+		</header>
+
+		<aside class="left-sidebar">
+			<div class="d-flex no-block nav-text-box align-items-center">
+				<span class="sidebar-brand">UAV</span>
+				<a class="waves-effect waves-dark ml-auto hidden-sm-down" href="javascript:void(0)"><i class="ti-menu"></i></a>
+				<a class="nav-toggler waves-effect waves-dark ml-auto hidden-sm-up" href="javascript:void(0)"><i class="ti-menu ti-close"></i></a>
+			</div>
+			<div class="scroll-sidebar">
+				<nav class="sidebar-nav">
+					<ul id="sidebarnav">
+						<li><a class="waves-effect waves-dark active" href="index.html"><i class="fa fa-home"></i><span class="hide-menu">首页</span></a></li>
+						<li><a class="waves-effect waves-dark" href="../task-center/index.html"><i class="fa fa-tasks"></i><span class="hide-menu">任务管理</span></a></li>
+						<li><a class="waves-effect waves-dark" href="../task-center/object_detection.html"><i class="fa fa-eye"></i><span class="hide-menu">图像检测</span></a></li>
+						<li><a class="waves-effect waves-dark" href="../route-plan/index.html"><i class="fa fa-map-o"></i><span class="hide-menu">航线规划</span></a></li>
+						<li><a class="waves-effect waves-dark" href="../login/login.html"><i class="fa fa-sign-in"></i><span class="hide-menu">登录页</span></a></li>
+					</ul>
+				</nav>
+			</div>
+		</aside>
+
+		<div class="page-wrapper">
+			<div class="container-fluid">
+				<div class="row page-titles">
+					<div class="col-md-5 align-self-center">
+						<h4 class="text-themecolor">首页概览</h4>
+					</div>
+					<div class="col-md-7 align-self-center text-right">
+						<div class="d-flex justify-content-end align-items-center">
+							<ol class="breadcrumb">
+								<li class="breadcrumb-item active">Home</li>
+							</ol>
+							<a class="btn btn-success d-none d-lg-block m-l-15" href="../login/login.html">进入系统</a>
+						</div>
+					</div>
+				</div>
+
+				<div class="row">
+					<div class="col-xl-8 col-lg-7">
+						<div class="card hero-card">
+							<div class="card-body">
+								<h2 class="mb-3">统一的无人机巡检后台工作台</h2>
+								<div class="d-flex flex-wrap" style="gap: 12px;">
+									<a class="btn btn-light text-primary" href="../login/login.html">登录</a>
+									<a class="btn btn-outline-light" href="../task-center/index.html">任务管理</a>
+									<a class="btn btn-outline-light" href="../route-plan/index.html">航线规划</a>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="col-xl-4 col-lg-5">
+						<div class="card h-100">
+							<div class="card-body">
+								<h5 class="card-title">系统状态</h5>
+								<div class="d-flex justify-content-between py-2 border-bottom"><span>任务管理</span><strong>可用</strong></div>
+								<div class="d-flex justify-content-between py-2 border-bottom"><span>航线规划</span><strong>可用</strong></div>
+								<div class="d-flex justify-content-between py-2 border-bottom"><span>图像检测</span><strong>可用</strong></div>
+								<div class="d-flex justify-content-between py-2"><span>登录服务</span><strong>可用</strong></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="quick-grid mt-4">
+					<div class="quick-card">
+						<h5>任务管理</h5>
+						<a class="btn btn-success" href="../task-center/index.html">打开任务页</a>
+					</div>
+					<div class="quick-card">
+						<h5>航线规划</h5>
+						<a class="btn btn-success" href="../route-plan/index.html">打开航线页</a>
+					</div>
+					<div class="quick-card">
+						<h5>图像检测</h5>
+						<a class="btn btn-success" href="../task-center/object_detection.html">打开检测页</a>
+					</div>
+				</div>
+			</div>
 		</div>
-	</section>
+	</div>
+
+	<script>
+		const userPanel = document.getElementById("userPanel");
+		const raw = localStorage.getItem("uav_user");
+		if (userPanel && raw) {
+			try {
+				const user = JSON.parse(raw);
+				const displayName = user.displayName || user.username || "未知用户";
+				userPanel.textContent = `欢迎，${displayName}`;
+			} catch (error) {
+				userPanel.textContent = "欢迎访问";
+			}
+		}
+	</script>
 </body>
 </html>

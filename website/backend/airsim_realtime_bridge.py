@@ -1,4 +1,5 @@
 import argparse
+import math
 import sys
 import time
 from typing import Optional
@@ -179,6 +180,130 @@ class PatrolController:
         self._dispatch_move(client, vehicle_name, self._target)
 
 
+class MissionController:
+    def __init__(
+        self,
+        mission_api: str,
+        refresh_sec: float,
+        arrive_thresh: float,
+        hold_sec: float,
+        speed: float,
+    ) -> None:
+        self.mission_api = mission_api
+        self.refresh_sec = max(1.0, refresh_sec)
+        self.arrive_thresh = max(0.2, arrive_thresh)
+        self.hold_sec = max(0.0, hold_sec)
+        self.speed = max(0.5, speed)
+
+        self._mission_id = ""
+        self._waypoints = []
+        self._target_index = -1
+        self._target = None
+        self._hold_until = 0.0
+        self._last_refresh = 0.0
+
+    @staticmethod
+    def _dist3(p1, p2) -> float:
+        dx = p1[0] - p2[0]
+        dy = p1[1] - p2[1]
+        dz = p1[2] - p2[2]
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    def _dispatch_move(self, client, vehicle_name: str, target) -> None:
+        tx, ty, tz = target
+        client.moveToPositionAsync(
+            tx,
+            ty,
+            tz,
+            self.speed,
+            drivetrain=airsim.DrivetrainType.MaxDegreeOfFreedom,
+            yaw_mode=airsim.YawMode(is_rate=False, yaw_or_rate=0),
+            vehicle_name=vehicle_name,
+        )
+        print(f"[bridge] 航线执行：前往航点 {self._target_index + 1} -> ({tx:.2f}, {ty:.2f}, {tz:.2f})")
+
+    def _apply_mission(self, mission: dict) -> bool:
+        if not mission:
+            return False
+
+        mission_id = mission.get("id", "")
+        waypoints = mission.get("waypoints", []) or []
+        if not mission_id or len(waypoints) < 2:
+            return False
+
+        if mission_id == self._mission_id:
+            return True
+
+        self._mission_id = mission_id
+        self._waypoints = waypoints
+        self._target_index = 0
+        self._target = self._extract_target(self._waypoints[0])
+        self._hold_until = 0.0
+        print(f"[bridge] 已载入新航线：{mission.get('routeName', '')}，航点数={len(waypoints)}")
+        return True
+
+    @staticmethod
+    def _extract_target(waypoint: dict):
+        return (
+            float(waypoint.get("worldX", 0.0)),
+            float(waypoint.get("worldY", 0.0)),
+            float(waypoint.get("worldZ", 0.0)),
+        )
+
+    def refresh(self, client, vehicle_name: str) -> bool:
+        now = time.time()
+        if now - self._last_refresh < self.refresh_sec:
+            return bool(self._waypoints)
+
+        self._last_refresh = now
+        try:
+            response = requests.get(self.mission_api, timeout=5.0)
+            payload = response.json()
+            if response.status_code >= 400:
+                print(f"[bridge] 航线获取失败: {payload}")
+                return bool(self._waypoints)
+            mission = payload.get("item")
+            return self._apply_mission(mission)
+        except Exception as e:
+            print(f"[bridge] 航线刷新失败: {e}")
+            return bool(self._waypoints)
+
+    def step(self, client, vehicle_name: str) -> None:
+        if not self._waypoints or self._target is None:
+            return
+
+        state = client.getMultirotorState(vehicle_name=vehicle_name)
+        pos = state.kinematics_estimated.position
+        current = (pos.x_val, pos.y_val, pos.z_val)
+
+        d = self._dist3(current, self._target)
+        now = time.time()
+        if d > self.arrive_thresh:
+            return
+
+        if self._hold_until == 0.0:
+            self._hold_until = now + self.hold_sec
+            print(f"[bridge] 到达航点 {self._target_index + 1}，悬停 {self.hold_sec:.1f}s")
+            client.hoverAsync(vehicle_name=vehicle_name)
+            return
+
+        if now < self._hold_until:
+            return
+
+        self._hold_until = 0.0
+        self._target_index += 1
+        if self._target_index >= len(self._waypoints):
+            print("[bridge] 航线执行完成")
+            self._waypoints = []
+            self._target = None
+            self._mission_id = self._mission_id
+            client.hoverAsync(vehicle_name=vehicle_name)
+            return
+
+        self._target = self._extract_target(self._waypoints[self._target_index])
+        self._dispatch_move(client, vehicle_name, self._target)
+
+
 def get_scene_frame(client, camera_name: str, vehicle_name: str):
     resp = client.simGetImages(
         [airsim.ImageRequest(camera_name, airsim.ImageType.Scene, False, False)],
@@ -239,6 +364,10 @@ def run_loop(
     patrol_speed: float,
     patrol_hold: float,
     patrol_arrive_thresh: float,
+    mission_api: str,
+    mission_refresh_sec: float,
+    mission_hold: float,
+    mission_arrive_thresh: float,
 ) -> None:
     client = airsim.MultirotorClient(ip=host, port=port)
     client.confirmConnection()
@@ -290,6 +419,14 @@ def run_loop(
     except Exception as e:
         print(f"[bridge] 巡检初始化失败: {e}")
 
+    mission_ctl = MissionController(
+        mission_api=mission_api,
+        refresh_sec=mission_refresh_sec,
+        arrive_thresh=mission_arrive_thresh,
+        hold_sec=mission_hold,
+        speed=patrol_speed,
+    )
+
     sent = 0
     t0 = time.time()
 
@@ -297,7 +434,10 @@ def run_loop(
         loop_start = time.time()
 
         try:
-            patrol_ctl.step(client, resolved_vehicle)
+            if mission_ctl.refresh(client, resolved_vehicle):
+                mission_ctl.step(client, resolved_vehicle)
+            else:
+                patrol_ctl.step(client, resolved_vehicle)
         except Exception as e:
             print(f"[bridge] 巡检控制异常: {e}")
 
@@ -398,6 +538,29 @@ def parse_args(argv: Optional[list[str]] = None):
         default=1.2,
         help="判定到达端点距离阈值（米）",
     )
+    parser.add_argument(
+        "--mission-api",
+        default="http://127.0.0.1:8000/api/route-missions/latest",
+        help="航线 mission 获取地址",
+    )
+    parser.add_argument(
+        "--mission-refresh-sec",
+        type=float,
+        default=2.0,
+        help="轮询最新航线的间隔（秒）",
+    )
+    parser.add_argument(
+        "--mission-hold",
+        type=float,
+        default=1.0,
+        help="航点到达后的悬停时间（秒）",
+    )
+    parser.add_argument(
+        "--mission-arrive-thresh",
+        type=float,
+        default=1.0,
+        help="航点到达判定距离阈值（米）",
+    )
     return parser.parse_args(argv)
 
 
@@ -422,6 +585,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             patrol_speed=args.patrol_speed,
             patrol_hold=args.patrol_hold,
             patrol_arrive_thresh=args.patrol_arrive_thresh,
+            mission_api=args.mission_api,
+            mission_refresh_sec=args.mission_refresh_sec,
+            mission_hold=args.mission_hold,
+            mission_arrive_thresh=args.mission_arrive_thresh,
         )
         return 0
     except KeyboardInterrupt:

@@ -6,101 +6,191 @@
     <title>航线规划 - 无人机智能巡检管控系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <header class="topbar">
-        <div class="brand">无人机智能巡检管控系统</div>
-        <nav class="topnav">
-            <a href="#">管控中心</a>
-            <a class="active" href="../task-center/index.html">作业中心</a>
-            <a href="#">飞控中心</a>
-            <a href="#">系统中心</a>
-        </nav>
-        <div id="userPanel" class="user-panel">管理员：admin</div>
-    </header>
+<body class="skin-default-dark fixed-layout">
+    <div id="main-wrapper">
+        <header class="topbar">
+            <nav class="navbar top-navbar navbar-expand-md navbar-dark">
+                <div class="navbar-header">
+                    <a class="navbar-brand" href="../index/index.html">
+                        <span class="brand-mark">UAV</span>
+                        <span class="brand-copy">无人机智能巡检管控系统</span>
+                    </a>
+                </div>
+                <div class="navbar-collapse d-flex justify-content-between align-items-center">
+                    <ul class="navbar-nav mr-auto top-links">
+                        <li class="nav-item"><a class="nav-link" href="../task-center/index.html">作业中心</a></li>
+                        <li class="nav-item"><a class="nav-link active" href="index.html">航线规划</a></li>
+                        <li class="nav-item"><a class="nav-link" href="../task-center/object_detection.html">图像检测</a></li>
+                        <li class="nav-item"><a class="nav-link" href="../index/index.html">首页</a></li>
+                    </ul>
+                    <ul class="navbar-nav my-lg-0">
+                        <li class="nav-item dropdown">
+                            <span id="userPanel" class="nav-link user-chip">管理员：admin</span>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </header>
 
-    <main class="layout">
-        <aside class="sidebar">
-            <a class="menu-item" href="../task-center/index.html">任务管理</a>
-            <a class="menu-item" href="#">任务记录</a>
-            <a class="menu-item active" href="index.html">航线规划</a>
-            <a class="menu-item" href="#">巡检对象管理</a>
-            <a class="menu-item" href="#">禁飞区管理</a>
+        <aside class="left-sidebar">
+            <div class="d-flex no-block nav-text-box align-items-center">
+                <span class="sidebar-brand">UAV</span>
+                <a class="waves-effect waves-dark ml-auto hidden-sm-down" href="javascript:void(0)"><i class="ti-menu"></i></a>
+                <a class="nav-toggler waves-effect waves-dark ml-auto hidden-sm-up" href="javascript:void(0)"><i class="ti-menu ti-close"></i></a>
+            </div>
+            <div class="scroll-sidebar">
+                <nav class="sidebar-nav">
+                    <ul id="sidebarnav">
+                        <li><a class="waves-effect waves-dark" href="../task-center/index.html"><i class="fa fa-tasks"></i><span class="hide-menu">任务管理</span></a></li>
+                        <li><a class="waves-effect waves-dark active" href="index.html"><i class="fa fa-map-o"></i><span class="hide-menu">航线规划</span></a></li>
+                        <li><a class="waves-effect waves-dark" href="../task-center/object_detection.html"><i class="fa fa-eye"></i><span class="hide-menu">图像检测</span></a></li>
+                        <li><a class="waves-effect waves-dark" href="../index/index.html"><i class="fa fa-home"></i><span class="hide-menu">首页</span></a></li>
+                    </ul>
+                </nav>
+            </div>
         </aside>
 
-        <section class="content">
-            <div class="crumb">飞控中心 / 航线规划 / 创建航线</div>
-
-            <div class="area-bar card">
-                <select id="province">
-                    <option>省</option>
-                    <option>河北省</option>
-                    <option>广东省</option>
-                </select>
-                <select id="city">
-                    <option>市</option>
-                    <option>石家庄市</option>
-                    <option>广州市</option>
-                </select>
-                <select id="district">
-                    <option>区/县</option>
-                    <option>长安区</option>
-                    <option>越秀区</option>
-                </select>
-                <button id="areaConfirm" class="btn btn-primary">确定</button>
-            </div>
-
-            <div class="map-wrap">
-                <div class="map-canvas" id="mapCanvas">
-                    <div class="map-mask"></div>
+        <div class="page-wrapper">
+            <div class="container-fluid">
+                <div class="row page-titles">
+                    <div class="col-md-5 align-self-center">
+                        <h4 class="text-themecolor">航线规划</h4>
+                    </div>
+                    <div class="col-md-7 align-self-center text-right">
+                        <div class="d-flex justify-content-end align-items-center">
+                            <ol class="breadcrumb">
+                                <li class="breadcrumb-item"><a href="../index/index.html">Home</a></li>
+                                <li class="breadcrumb-item active">航线规划</li>
+                            </ol>
+                            <a class="btn btn-success d-none d-lg-block m-l-15" href="../task-center/index.html">任务管理</a>
+                        </div>
+                    </div>
                 </div>
 
-                <section class="route-panel card">
-                    <button id="backToTask" class="link-btn">返回</button>
-                    <h3>航线设置</h3>
+                <div class="card mb-3">
+                    <div class="card-body area-bar">
+                        <select id="province" class="form-control">
+                            <option>省</option>
+                            <option>河北省</option>
+                            <option>广东省</option>
+                        </select>
+                        <select id="city" class="form-control">
+                            <option>市</option>
+                            <option>石家庄市</option>
+                            <option>广州市</option>
+                        </select>
+                        <select id="district" class="form-control">
+                            <option>区/县</option>
+                            <option>长安区</option>
+                            <option>越秀区</option>
+                        </select>
+                        <button id="areaConfirm" class="btn btn-success" type="button">确定</button>
+                    </div>
+                </div>
 
-                    <label>航线名称
-                        <input id="routeName" type="text" placeholder="请输入航线名称">
-                    </label>
-                    <label>起始点经度(°)
-                        <input id="lng" type="text" placeholder="请输入经度">
-                    </label>
-                    <label>起始点纬度(°)
-                        <input id="lat" type="text" placeholder="请输入纬度">
-                    </label>
-                    <label>航点间距(m)
-                        <input id="distance" type="text" placeholder="请输入航点间距">
-                    </label>
-                    <label>航点数量
-                        <input id="pointCount" type="text" placeholder="请输入航点数量">
-                    </label>
-                    <label>航点方向(°)
-                        <input id="direction" type="text" placeholder="请输入方向角度">
-                    </label>
-                    <label>航线高度(m)
-                        <input id="height" type="text" placeholder="请输入航线高度">
-                    </label>
-
-                    <div class="panel-actions">
-                        <button id="saveRoute" class="btn btn-primary">确认</button>
-                        <button id="cancelRoute" class="btn btn-secondary">取消</button>
+                <div class="map-wrap">
+                    <div class="map-canvas" id="mapCanvas">
+                        <img id="mapImage" class="map-image" alt="UE4 地图底图">
+                        <div class="map-mask"></div>
+                        <svg id="routeLayer" class="route-layer" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
                     </div>
 
-                    <p class="tip" id="formTip"></p>
-                </section>
+                    <section class="route-panel card">
+                        <div class="card-body">
+                            <button id="backToTask" class="link-btn" type="button">返回</button>
+                            <h3>航线设置</h3>
 
-                <div class="tool-group">
-                    <button class="tool-btn active" data-tool="point">航点</button>
-                    <button class="tool-btn" data-tool="line">航线</button>
-                    <button class="tool-btn" data-tool="area">区域</button>
+                            <label>航线名称
+                                <input id="routeName" class="form-control" type="text" placeholder="请输入航线名称">
+                            </label>
+                            <label>起始点经度(°)
+                                <input id="lng" class="form-control" type="text" placeholder="请输入经度">
+                            </label>
+                            <label>起始点纬度(°)
+                                <input id="lat" class="form-control" type="text" placeholder="请输入纬度">
+                            </label>
+                            <label>航点间距(m)
+                                <input id="distance" class="form-control" type="text" placeholder="请输入航点间距">
+                            </label>
+                            <label>航点数量
+                                <input id="pointCount" class="form-control" type="text" placeholder="请输入航点数量">
+                            </label>
+                            <label>航点方向(°)
+                                <input id="direction" class="form-control" type="text" placeholder="请输入方向角度">
+                            </label>
+                            <label>航线高度(m)
+                                <input id="height" class="form-control" type="text" placeholder="请输入航线高度">
+                            </label>
+
+                            <div class="panel-actions">
+                                <button id="saveRoute" class="btn btn-success" type="button">保存草稿</button>
+                                <button id="publishMission" class="btn btn-primary" type="button">下发执行</button>
+                                <button id="cancelRoute" class="btn btn-outline-secondary" type="button">重置</button>
+                            </div>
+
+                            <p class="tip" id="formTip"></p>
+
+                            <h4 class="section-title">地图校准</h4>
+                            <label>底图地址
+                                <input id="mapImageUrl" class="form-control" type="text" placeholder="例如：UE4 俯视图截图 URL">
+                            </label>
+                            <label>默认航高(m)
+                                <input id="defaultAltitude" class="form-control" type="text" placeholder="执行航线时的高度">
+                            </label>
+
+                            <div class="toggle-row">
+                                <label class="toggle-item"><input id="invertX" type="checkbox"> X 轴反向</label>
+                                <label class="toggle-item"><input id="invertY" type="checkbox"> Y 轴反向</label>
+                            </div>
+
+                            <div class="calibration-grid">
+                                <div class="calibration-card">
+                                    <h5>标定点 A</h5>
+                                    <label>世界 X <input id="anchorAX" class="form-control" type="text" placeholder="UE4 世界坐标 X"></label>
+                                    <label>世界 Y <input id="anchorAY" class="form-control" type="text" placeholder="UE4 世界坐标 Y"></label>
+                                    <button id="setAnchorA" class="btn btn-outline-primary btn-sm" type="button">记录当前点击为 A</button>
+                                    <p id="anchorATip" class="mini-tip">尚未记录</p>
+                                </div>
+                                <div class="calibration-card">
+                                    <h5>标定点 B</h5>
+                                    <label>世界 X <input id="anchorBX" class="form-control" type="text" placeholder="UE4 世界坐标 X"></label>
+                                    <label>世界 Y <input id="anchorBY" class="form-control" type="text" placeholder="UE4 世界坐标 Y"></label>
+                                    <button id="setAnchorB" class="btn btn-outline-primary btn-sm" type="button">记录当前点击为 B</button>
+                                    <p id="anchorBTip" class="mini-tip">尚未记录</p>
+                                </div>
+                            </div>
+
+                            <div class="panel-actions compact">
+                                <button id="clearCalibration" class="btn btn-outline-secondary" type="button">清空标定</button>
+                            </div>
+
+                            <div class="panel-actions compact">
+                                <button id="clearWaypoints" class="btn btn-outline-danger" type="button">清空航点</button>
+                            </div>
+
+                            <p class="tip" id="missionTip"></p>
+
+                            <h4 class="section-title">航点列表</h4>
+                            <ul id="waypointList" class="waypoint-list"></ul>
+                        </div>
+                    </section>
+
+                    <div class="tool-group">
+                        <button class="tool-btn active" data-tool="point" type="button">航点</button>
+                        <button class="tool-btn" data-tool="line" type="button">航线</button>
+                        <button class="tool-btn" data-tool="area" type="button">区域</button>
+                    </div>
                 </div>
-            </div>
 
-            <section class="card draft-card">
-                <h4>航线草稿</h4>
-                <ul id="draftList"></ul>
-            </section>
-        </section>
-    </main>
+                <section class="card draft-card mt-3">
+                    <div class="card-body">
+                        <h4>航线草稿</h4>
+                        <ul id="draftList"></ul>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>

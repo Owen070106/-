@@ -1,9 +1,10 @@
+import json
 import os
 import shutil
 import threading
 from datetime import datetime
 from uuid import uuid4
-from typing import Generator, Optional
+from typing import Any, Generator, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -172,6 +173,39 @@ class RoutePayload(BaseModel):
     height: str = Field(min_length=1, max_length=32)
 
 
+class MissionCalibrationPayload(BaseModel):
+    worldCenterX: Optional[float] = None
+    worldCenterY: Optional[float] = None
+    mapWidthMeters: Optional[float] = None
+    mapHeightMeters: Optional[float] = None
+    anchorA: Optional[dict[str, Any]] = None
+    anchorB: Optional[dict[str, Any]] = None
+    worldAX: Optional[float] = None
+    worldAY: Optional[float] = None
+    worldBX: Optional[float] = None
+    worldBY: Optional[float] = None
+    invertX: bool = False
+    invertY: bool = False
+    defaultAltitude: Optional[float] = None
+
+
+class MissionWaypointPayload(BaseModel):
+    order: int = Field(ge=1)
+    u: float = Field(ge=0, le=1)
+    v: float = Field(ge=0, le=1)
+    worldX: float
+    worldY: float
+    worldZ: float
+
+
+class RouteMissionPayload(BaseModel):
+    routeDraftId: Optional[int] = None
+    routeName: str = Field(min_length=1, max_length=120)
+    mapImageUrl: Optional[str] = Field(default=None, max_length=255)
+    calibration: MissionCalibrationPayload
+    waypoints: list[MissionWaypointPayload]
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -244,6 +278,120 @@ def init_seed_data() -> None:
         db.commit()
     finally:
         db.close()
+
+
+ROUTE_MISSION_FILE = os.path.join(os.path.dirname(__file__), "route_mission_current.json")
+
+
+def load_route_mission() -> dict[str, Any]:
+    if not os.path.isfile(ROUTE_MISSION_FILE):
+        return {"item": None}
+
+    try:
+        with open(ROUTE_MISSION_FILE, "r", encoding="utf-8") as fp:
+            mission = json.load(fp)
+    except Exception:
+        return {"item": None}
+
+    return {"item": mission}
+
+
+def save_route_mission(payload: dict[str, Any]) -> None:
+    with open(ROUTE_MISSION_FILE, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, ensure_ascii=False, indent=2)
+
+
+def _as_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_anchor(
+    anchor: Any,
+    fallback_world_x: Optional[float],
+    fallback_world_y: Optional[float],
+    label: str,
+) -> dict[str, float]:
+    if not isinstance(anchor, dict):
+        raise ValueError(f"标定点 {label} 格式无效")
+
+    u = _as_float(anchor.get("u"))
+    v = _as_float(anchor.get("v"))
+    if u is None or v is None or not (0 <= u <= 1) or not (0 <= v <= 1):
+        raise ValueError(f"标定点 {label} 的屏幕坐标无效")
+
+    world_x = _as_float(anchor.get("worldX"))
+    world_y = _as_float(anchor.get("worldY"))
+    if world_x is None:
+        world_x = fallback_world_x
+    if world_y is None:
+        world_y = fallback_world_y
+    if world_x is None or world_y is None:
+        raise ValueError(f"标定点 {label} 的世界坐标无效")
+
+    return {
+        "u": round(u, 6),
+        "v": round(v, 6),
+        "worldX": round(world_x, 6),
+        "worldY": round(world_y, 6),
+    }
+
+
+def normalize_mission_calibration(payload: MissionCalibrationPayload) -> dict[str, Any]:
+    invert_x = bool(payload.invertX)
+    invert_y = bool(payload.invertY)
+    default_altitude = _as_float(payload.defaultAltitude)
+    if default_altitude is None or default_altitude <= 0:
+        default_altitude = 25.0
+
+    legacy_center_x = _as_float(payload.worldCenterX)
+    legacy_center_y = _as_float(payload.worldCenterY)
+    legacy_width = _as_float(payload.mapWidthMeters)
+    legacy_height = _as_float(payload.mapHeightMeters)
+    if (
+        legacy_center_x is not None
+        and legacy_center_y is not None
+        and legacy_width is not None
+        and legacy_height is not None
+    ):
+        if legacy_width <= 0 or legacy_height <= 0:
+            raise ValueError("旧版标定参数 mapWidthMeters/mapHeightMeters 必须大于 0")
+        return {
+            "format": "legacy",
+            "invertX": invert_x,
+            "invertY": invert_y,
+            "defaultAltitude": round(default_altitude, 6),
+            "worldCenterX": round(legacy_center_x, 6),
+            "worldCenterY": round(legacy_center_y, 6),
+            "mapWidthMeters": round(legacy_width, 6),
+            "mapHeightMeters": round(legacy_height, 6),
+        }
+
+    world_ax = _as_float(payload.worldAX)
+    world_ay = _as_float(payload.worldAY)
+    world_bx = _as_float(payload.worldBX)
+    world_by = _as_float(payload.worldBY)
+    if payload.anchorA is not None or payload.anchorB is not None:
+        anchor_a = _normalize_anchor(payload.anchorA, world_ax, world_ay, "A")
+        anchor_b = _normalize_anchor(payload.anchorB, world_bx, world_by, "B")
+        return {
+            "format": "anchor",
+            "invertX": invert_x,
+            "invertY": invert_y,
+            "defaultAltitude": round(default_altitude, 6),
+            "anchorA": anchor_a,
+            "anchorB": anchor_b,
+            "worldAX": anchor_a["worldX"],
+            "worldAY": anchor_a["worldY"],
+            "worldBX": anchor_b["worldX"],
+            "worldBY": anchor_b["worldY"],
+        }
+
+    raise ValueError("标定参数不完整，请提供旧版中心标定或新版双锚点标定")
 
 
 @app.on_event("startup")
@@ -345,6 +493,8 @@ def run_ai_detection(image_path: str, model_name: str = "") -> dict:
             "objects": [],
             "result_image_url": None,
             "model": os.path.basename(selected_model_path) if selected_model_path else "",
+            "imageWidth": None,
+            "imageHeight": None,
         }
 
     try:
@@ -356,9 +506,22 @@ def run_ai_detection(image_path: str, model_name: str = "") -> dict:
                 "objects": [],
                 "result_image_url": None,
                 "model": os.path.basename(selected_model_path),
+                "imageWidth": None,
+                "imageHeight": None,
             }
 
         result = results[0]
+        image_height = None
+        image_width = None
+        orig_shape = getattr(result, "orig_shape", None)
+        if isinstance(orig_shape, (list, tuple)) and len(orig_shape) >= 2:
+            try:
+                image_height = int(orig_shape[0])
+                image_width = int(orig_shape[1])
+            except (TypeError, ValueError):
+                image_height = None
+                image_width = None
+
         result_filename = f"result_{uuid4().hex}.jpg"
         result_path = os.path.join(RESULT_DIR, result_filename)
         result.save(filename=result_path)
@@ -422,6 +585,8 @@ def run_ai_detection(image_path: str, model_name: str = "") -> dict:
             "objects": objects,
             "result_image_url": f"/static/results/{result_filename}",
             "model": os.path.basename(selected_model_path),
+            "imageWidth": image_width,
+            "imageHeight": image_height,
         }
     except Exception as e:
         return {
@@ -430,6 +595,8 @@ def run_ai_detection(image_path: str, model_name: str = "") -> dict:
             "objects": [],
             "result_image_url": None,
             "model": os.path.basename(selected_model_path),
+            "imageWidth": None,
+            "imageHeight": None,
         }
 
 
@@ -443,6 +610,8 @@ def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
             "objects": [],
             "result_image_url": None,
             "model": os.path.basename(selected_model_path) if selected_model_path else "",
+            "imageWidth": None,
+            "imageHeight": None,
         }
 
     if cv2 is None or np is None:
@@ -451,6 +620,8 @@ def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
             "message": "未安装 opencv-python 或 numpy，无法处理实时帧",
             "objects": [],
             "result_image_url": None,
+            "imageWidth": None,
+            "imageHeight": None,
         }
 
     try:
@@ -462,6 +633,8 @@ def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
                 "objects": [],
                 "result_image_url": None,
                 "model": os.path.basename(selected_model_path),
+                "imageWidth": None,
+                "imageHeight": None,
             }
 
         result = results[0]
@@ -533,6 +706,8 @@ def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
             "objects": objects,
             "result_image_url": f"/static/results/{result_filename}",
             "model": os.path.basename(selected_model_path),
+            "imageWidth": int(frame_bgr.shape[1]) if hasattr(frame_bgr, "shape") else None,
+            "imageHeight": int(frame_bgr.shape[0]) if hasattr(frame_bgr, "shape") else None,
         }
     except Exception as e:
         return {
@@ -541,6 +716,8 @@ def run_ai_detection_frame(frame_bgr, model_name: str = "") -> dict:
             "objects": [],
             "result_image_url": None,
             "model": os.path.basename(selected_model_path),
+            "imageWidth": None,
+            "imageHeight": None,
         }
 
 
@@ -772,6 +949,35 @@ def create_route(payload: RoutePayload, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(route)
     return {"message": "航线保存成功", "id": route.id}
+
+
+@app.post("/api/route-missions")
+def publish_route_mission(payload: RouteMissionPayload):
+    if len(payload.waypoints) < 2:
+        raise HTTPException(status_code=400, detail="请至少添加 2 个航点")
+
+    try:
+        normalized_calibration = normalize_mission_calibration(payload.calibration)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    mission = {
+        "id": uuid4().hex,
+        "routeDraftId": payload.routeDraftId,
+        "routeName": payload.routeName,
+        "mapImageUrl": payload.mapImageUrl,
+        "calibration": normalized_calibration,
+        "waypoints": [item.model_dump() for item in payload.waypoints],
+        "createdAt": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "status": "ready",
+    }
+    save_route_mission(mission)
+    return {"message": "航线已下发到执行器", "item": mission}
+
+
+@app.get("/api/route-missions/latest")
+def get_latest_route_mission():
+    return load_route_mission()
 
 
 # ==========================================
