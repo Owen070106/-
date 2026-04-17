@@ -124,17 +124,3 @@ python website/backend/airsim_realtime_bridge.py --vehicle Drone1 --camera down_
 
 如果你的 UE4/AirSim 已经在空中，也可以只执行任务，不自动起飞。
 
-## 6. 新增实时接口说明
-
-- POST /api/detect/frame
-	- 表单字段：
-		- file: 图片帧（image/*）
-		- source: 来源标签（默认 airsim）
-		- camera: 相机名（默认 down_cam）
-		- persist_upload: 是否保存原始帧（默认 false）
-- GET /api/detections/latest
-	- 获取最新一条检测记录，供前端实时刷新。
-- POST /api/route-missions
-	- 接收 route-plan 下发的航线 mission。
-- GET /api/route-missions/latest
-	- 返回最新 mission，供 AirSim 桥接脚本轮询执行。
