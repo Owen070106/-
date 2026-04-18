@@ -1,0 +1,244 @@
+@import url("../../html/dist/css/style.css");
+
+:root {
+    --uav-primary: #009efb;
+    --uav-surface: rgba(255, 255, 255, 0.92);
+    --uav-border: rgba(148, 163, 184, 0.18);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Rubik", "Microsoft YaHei", sans-serif;
+    background:
+        radial-gradient(circle at top right, rgba(0, 158, 251, 0.18), transparent 28%),
+        radial-gradient(circle at left center, rgba(54, 190, 166, 0.14), transparent 26%),
+        #edf1f5;
+}
+
+a {
+    text-decoration: none;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #0f172a !important;
+    font-weight: 700;
+}
+
+.brand-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #009efb, #36bea6);
+    box-shadow: 0 14px 30px rgba(0, 158, 251, 0.22);
+}
+
+.brand-copy {
+    white-space: nowrap;
+}
+
+.top-links {
+    gap: 6px;
+}
+
+.top-links .nav-link {
+    padding: 0.55rem 0.9rem !important;
+    border-radius: 999px;
+    color: #475569 !important;
+    font-weight: 500;
+}
+
+.top-links .nav-link.active,
+.top-links .nav-link:hover {
+    color: #009efb !important;
+    background: rgba(0, 158, 251, 0.1);
+}
+
+.user-chip {
+    padding: 0.45rem 0.9rem !important;
+    border-radius: 999px;
+    background: rgba(0, 158, 251, 0.08);
+    color: #334155 !important;
+    font-weight: 500;
+}
+
+.left-sidebar {
+    background: #2b2f3a;
+}
+
+.sidebar-brand {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-nav > ul > li > a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    color: #94a3b8;
+    text-decoration: none;
+}
+
+.sidebar-nav > ul > li > a.active,
+.sidebar-nav > ul > li > a:hover {
+    color: #fff;
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.sidebar-nav > ul > li > a i {
+    width: 20px;
+    text-align: center;
+}
+
+.page-wrapper {
+    padding-bottom: 28px;
+}
+
+.page-titles {
+    margin: 0 0 18px;
+}
+
+.page-titles h4 {
+    margin-bottom: 4px;
+    font-size: 24px;
+}
+
+.page-titles .breadcrumb {
+    background: transparent;
+    padding: 0;
+}
+
+.page-titles .breadcrumb-item + .breadcrumb-item::before {
+    color: #94a3b8;
+}
+
+.page-titles .breadcrumb-item a {
+    color: #64748b;
+    text-decoration: none;
+}
+
+.page-titles .breadcrumb-item.active {
+    color: var(--uav-primary);
+}
+
+.card {
+    border: 1px solid var(--uav-border);
+    border-radius: 18px;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
+    background: var(--uav-surface);
+}
+
+.card-body {
+    padding: 18px;
+}
+
+.hero-card {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background:
+        linear-gradient(135deg, rgba(0, 158, 251, 0.94), rgba(54, 190, 166, 0.88)),
+        #009efb;
+    color: #fff;
+}
+
+.hero-card .text-muted,
+.hero-card p,
+.hero-card .breadcrumb,
+.hero-card .breadcrumb a {
+    color: rgba(255, 255, 255, 0.84) !important;
+}
+
+.hero-card .btn {
+    border-radius: 999px;
+}
+
+.quick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.quick-card {
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid var(--uav-border);
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+}
+
+.quick-card h5 {
+    margin-bottom: 6px;
+}
+
+.quick-card p {
+    margin-bottom: 0;
+    color: #64748b;
+}
+
+.quick-card .btn {
+    margin-top: 14px;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.feature-card {
+    padding: 18px;
+    border-radius: 18px;
+    background: #fff;
+    border: 1px solid var(--uav-border);
+}
+
+.feature-card h5 {
+    margin-bottom: 10px;
+}
+
+.feature-card ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #475569;
+}
+
+.feature-card li + li {
+    margin-top: 8px;
+}
+
+@media (max-width: 1080px) {
+    .quick-grid,
+    .feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .brand-copy {
+        white-space: normal;
+    }
+}
